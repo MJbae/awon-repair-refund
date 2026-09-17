@@ -1,0 +1,20 @@
+{
+  "name": "awon-repair-refund",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "아원데코빌 장기수선비 정산 계산기",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "validate": "node scripts/validate-data.mjs",
+    "build": "npm run validate && node scripts/prepare-pages.mjs",
+    "check": "npm run test && npm run build"
+  },
+  "devDependencies": {
+    "happy-dom": "20.14.5"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "from":"2024-01",
+  "to":"2026-12",
+  "amount":280000,
+  "status":"assumption",
+  "source":"사용자가 정한 계산 가정",
+  "includedInMaintenanceFee":true,
+  "allocation":"세대 공급면적 비례 납부 가정"
+}

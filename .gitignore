@@ -1,0 +1,11 @@
+# Original evidence contains resident names, bank details and profile photos.
+/images/
+/docs/private/
+/private-data/
+/exports/
+.DS_Store
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
