@@ -76,7 +76,14 @@ test('rate override and invalid overlapping range do not discard valid entries',
 });
 test('uncovered months can explicitly inherit the default',async t=>{
   const {$,change,period,submit}=await setup(t);
-  change('unit','101');period('2023-12','2024-01');submit();
+  change('unit','101');period('2023-11','2023-12');
+  assert.equal($('reserve-heading').textContent,'금액 미입력');
+  assert.equal($('reserve-unit-label').textContent,'');
+  assert.equal($('reserve-badge').textContent,'전체 기간 금액 미입력');
+  period('2023-12','2024-01');
+  assert.equal($('reserve-heading').textContent,'280,000');
+  assert.equal($('reserve-badge').textContent,'일부 기간 금액 미입력');
+  submit();
   assert.match($('result-title').textContent,/부분 합계/);assert.equal($('claim-value').textContent,'23,771');
   $('missing-notice').querySelector('button').click();assert.equal($('claim-value').textContent,'47,543');
 });

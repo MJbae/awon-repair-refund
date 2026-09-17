@@ -36,10 +36,11 @@
         <p id="period-error" class="error" hidden></p>
       </section>
       <section class="reserve-section">
-        <div class="reserve-heading"><div><span class="help">아파트 전체 월 장기수선비</span><p><strong id="reserve-heading">280,000</strong><span id="reserve-unit-label"> 원</span></p></div><span id="reserve-badge" class="badge">2024~2026 기본값</span></div>
-        <details id="amount-options" class="options"><summary>금액이 달랐다면 변경하기<span aria-hidden="true">+</span></summary>
+        <p class="reserve-guide">아파트 전체 적립액에서 우리 집 면적 비율만큼 계산해요.</p>
+        <details id="amount-options" class="options"><summary>계산 기준 확인·변경<span aria-hidden="true">+</span></summary>
           <div class="options-body">
-            <p class="help">우리 집 관리비가 아닌 <strong>아파트 전체의 월 장기수선비</strong>를 입력하세요.</p>
+            <div class="reserve-basis"><p class="reserve-basis-label">아파트 전체 월 적립액</p><p class="reserve-basis-value"><span id="reserve-heading">280,000</span><span id="reserve-unit-label"> 원</span></p><p id="reserve-badge" class="help">2024~2026 기본값</p></div>
+            <p class="help">아파트 전체가 한 달 동안 모으는 장기수선 적립액입니다. 아래에서 적용할 금액이나 기간을 조정할 수 있어요.</p>
             <label for="batch-amount">선택 기간에 같은 금액 적용</label>
             <div class="inline-action"><div class="input-suffix"><input id="batch-amount" inputmode="numeric" placeholder="280,000" aria-label="일괄 적용할 단지 월 금액"><span>원</span></div><button id="apply-batch" type="button" class="secondary-button">적용</button></div>
             <label class="checkbox-label"><input id="replace-overrides" type="checkbox">기간별·월별 수정도 함께 바꾸기</label>
@@ -51,7 +52,7 @@
           </div>
         </details>
       </section>
-      <div class="calculate-action"><p id="form-error" class="error" role="alert" hidden></p><button id="calculate-button" class="primary-button" type="submit" disabled>정산액 계산하기 <span aria-hidden="true">→</span></button><p class="privacy-note">입력한 내용은 외부로 전송되지 않아요.</p></div>
+      <div class="calculate-action"><p id="form-error" class="error" role="alert" hidden></p><button id="calculate-button" class="primary-button" type="submit" disabled>우리 집 정산액 계산하기 <span aria-hidden="true">→</span></button><p class="privacy-note">입력한 내용은 외부로 전송되지 않아요.</p></div>
     </form>
     <section id="result" class="result" hidden aria-labelledby="result-title" tabindex="-1">
       <div class="result-top"><span class="badge result-badge">면적 비례 추정</span><span id="result-unit"></span></div>

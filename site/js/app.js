@@ -107,9 +107,10 @@ function renderAmountHeading() {
   try { reserves = listMonths(state.start,state.end).map(reserveFor); } catch { /* Empty or incomplete range uses preset label. */ }
   const amounts = [...new Set(reserves.filter(r => r.amount !== null).map(r => r.amount))];
   const mixed = amounts.length > 1;
-  $('reserve-heading').textContent = mixed ? '기간별 금액' : won(amounts[0] ?? defaults.amount);
-  $('reserve-unit-label').textContent = mixed ? '' : ' 원';
-  $('reserve-badge').textContent = reserves.some(r => r.amount === null) ? '일부 금액 미입력' : reserves.some(r => r.source !== '기본 가정') ? '수정 금액 적용' : `${defaults.from.slice(0,4)}~${defaults.to.slice(0,4)} 기본값`;
+  const allMissing = reserves.length > 0 && amounts.length === 0;
+  $('reserve-heading').textContent = allMissing ? '금액 미입력' : mixed ? '기간별로 다름' : won(amounts[0] ?? defaults.amount);
+  $('reserve-unit-label').textContent = mixed || allMissing ? '' : ' 원';
+  $('reserve-badge').textContent = allMissing ? '전체 기간 금액 미입력' : reserves.some(r => r.amount === null) ? '일부 기간 금액 미입력' : reserves.some(r => r.source !== '기본 가정') ? '수정 금액 적용' : `${defaults.from.slice(0,4)}~${defaults.to.slice(0,4)} 기본값`;
 }
 
 function householdDrafts() { return state.drafts.households[state.unit] ||= {}; }
@@ -301,7 +302,7 @@ function renderLegal() {
   $('legal-entries').innerHTML = legal.entries.map(entry => `<div class="legal-entry"><p class="legal-condition">${e(entry.condition)}</p><blockquote>${e(entry.quote)}</blockquote><a href="${e(entry.url)}" target="_blank" rel="noopener noreferrer">${e(entry.title)} ↗</a></div>`).join('');
   $('source-content').innerHTML = `
     <section class="source-block"><h3>계산은 이렇게 해요</h3><div class="formula-steps"><span>단지의 월 장기수선비</span><b aria-hidden="true">×</b><span>우리 집 면적</span><b aria-hidden="true">÷</b><span>전체 면적</span></div><p>이렇게 구한 우리 집 월별 금액을 선택한 기간 동안 더합니다. 전체 공급면적은 <strong>${formatArea(building.totalSupply)}㎡</strong>입니다.</p></section>
-    <section class="source-block"><h3>기본 금액과 납부 가정</h3><dl class="source-facts"><div><dt>기본 기간</dt><dd>${e(formatMonth(defaults.from))}~${e(formatMonth(defaults.to))}</dd></div><div><dt>단지 월 금액</dt><dd>${won(defaults.amount)}원</dd></div><div><dt>납부 방식</dt><dd>관리비에 포함해 면적 비율만큼 납부한 것으로 가정</dd></div></dl><p>금액이 바뀐 달은 ‘금액이 달랐다면 변경하기’에서 조정할 수 있어요. 미래 월은 향후 예상액으로 따로 표시합니다.</p></section>
+    <section class="source-block"><h3>기본 금액과 납부 가정</h3><dl class="source-facts"><div><dt>기본 기간</dt><dd>${e(formatMonth(defaults.from))}~${e(formatMonth(defaults.to))}</dd></div><div><dt>단지 월 금액</dt><dd>${won(defaults.amount)}원</dd></div><div><dt>납부 방식</dt><dd>관리비에 포함해 면적 비율만큼 납부한 것으로 가정</dd></div></dl><p>금액이 바뀐 달은 ‘계산 기준 확인·변경’에서 조정할 수 있어요. 미래 월은 향후 예상액으로 따로 표시합니다.</p></section>
     <section class="source-block"><h3>호수별 면적</h3><p>제공해 주신 호별 자료를 반영했습니다. 계산에는 공급면적을 사용하며, A·B는 타입 표시입니다.</p><div class="table-wrap" tabindex="0" role="region" aria-label="호수별 공급면적과 전용면적 표"><table><caption class="sr-only">호수별 면적, 단위 제곱미터</caption><thead><tr><th scope="col">호수</th><th scope="col">공급면적 ㎡</th><th scope="col">전용면적 ㎡</th></tr></thead><tbody>${building.units.map(unit => { const type = unitType(unit); return `<tr><th scope="row">${unit}호</th><td>${(type.supply/100).toFixed(2)}${type.variant ? ` <small class="type-tag">${e(type.variant)}</small>` : ''}</td><td>${(type.exclusive/100).toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div></section>
     <section class="source-block"><h3>자료 출처</h3><p>호수와 면적의 연결은 사용자 제공 자료를, 공급·전용 면적 타입은 아래 공개 자료를 참고했습니다.</p><div class="source-links">${building.sources.map(source => `<a href="${e(source.url)}" target="_blank" rel="noopener noreferrer"><span>${e(source.title)}</span><span class="source-link-action">새 창 <span aria-hidden="true">↗</span></span></a>`).join('')}</div><p class="help">공개 자료 확인일: ${e(building.checkedAt)}</p></section>
 `;
