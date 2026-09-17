@@ -1,10 +1,10 @@
 import { addMonths, calculate, currentMonth, daysInMonth, formatMonth, listMonths, monthIndex, parseMoney, reserveForMonth, validateRanges } from './calculation.js';
-import { escapeHTML as e, won } from './format.js';
+import { escapeHTML as e, won, formatArea, formatFraction, formatPercentage } from './format.js';
 
 const $ = id => document.getElementById(id);
 const BASE_YEAR = 2024;
 const periodTouched = {start:false,end:false};
-const state = { unit:'', start:'', end:'', batch:{}, ranges:[], monthly:{}, households:{}, refunds:{}, drafts:{reserve:{},households:{}} };
+const state = { unit:'', start:'', end:'', batch:{}, ranges:[], monthly:{}, households:{}, refunds:{}, refundInputs:{}, drafts:{reserve:{},households:{}} };
 let building, defaults, legal, currentResult = null;
 const setMessage = (id, message = '') => { $(id).textContent = message; $(id).hidden = !message; };
 const dataURL = file => new URL(`../data/${file}.json`, import.meta.url);
@@ -31,6 +31,18 @@ async function init() {
 function activeHousehold() {
   if (!state.unit) return {};
   return state.households[state.unit] ||= {};
+}
+function selectedHousehold(unit,start,end) {
+  return Object.fromEntries(Object.entries(state.households[unit] || {}).filter(([month]) => start <= month && month <= end));
+}
+function refundFor(unit) {
+  const raw = state.refundInputs[unit];
+  return raw === undefined ? state.refunds[unit] || 0 : raw.trim() ? parseMoney(raw,'반환받은 금액') : 0;
+}
+function renderRefundInput() {
+  $('refunded').value = state.refundInputs[state.unit] ?? (state.refunds[state.unit] ? won(state.refunds[state.unit]) : '');
+  try { refundFor(state.unit); setMessage('refund-error'); }
+  catch(error) { setMessage('refund-error',error.message); }
 }
 function dirty() {
   currentResult = null;
@@ -82,7 +94,7 @@ function renderUnitArea() {
 function syncForm() {
   $('unit').value = state.unit;
   writeMonth('start', state.start); writeMonth('end', state.end);
-  $('refunded').value = state.refunds[state.unit] ? won(state.refunds[state.unit]) : '';
+  renderRefundInput();
   renderUnitArea(); renderPeriod(); renderRanges(); renderMonthEditors(); renderAmountHeading();
 }
 function renderRanges() {
@@ -97,7 +109,7 @@ function renderAmountHeading() {
   const mixed = amounts.length > 1;
   $('reserve-heading').textContent = mixed ? '기간별 금액' : won(amounts[0] ?? defaults.amount);
   $('reserve-unit-label').textContent = mixed ? '' : ' 원';
-  $('reserve-badge').textContent = reserves.some(r => r.amount === null) ? '일부 금액 미입력' : reserves.some(r => r.source !== '기본 가정') ? '수정 금액 적용' : '2024~2026 기본값';
+  $('reserve-badge').textContent = reserves.some(r => r.amount === null) ? '일부 금액 미입력' : reserves.some(r => r.source !== '기본 가정') ? '수정 금액 적용' : `${defaults.from.slice(0,4)}~${defaults.to.slice(0,4)} 기본값`;
 }
 
 function householdDrafts() { return state.drafts.households[state.unit] ||= {}; }
@@ -125,7 +137,7 @@ function renderMonthEditors() {
     const invalid = action => draft[action] ? 'aria-invalid="true"' : '';
     return `<details class="month-item" data-month="${month}" ${openMonths.has(month) ? 'open' : ''}><summary>${e(formatMonth(month))}<span class="month-value">${reserve.amount === null ? '금액 미입력' : `단지 ${won(reserve.amount)}원`}</span></summary><div class="month-controls">
       <label>단지 월 장기수선비<input data-month-action="reserve" inputmode="numeric" value="${e(draft.reserve?.value ?? (Object.hasOwn(state.monthly, month) ? won(state.monthly[month]) : ''))}" ${invalid('reserve')} placeholder="${reserve.amount === null ? '금액 입력' : won(reserve.amount)}" aria-label="${month} 단지 월 금액"></label>
-      <p class="help">${e(reserve.source)} · 위 칸을 비우면 기간별 설정을 사용합니다.</p>
+      <p class="help reserve-source">${e(reserve.source)} · 위 칸을 비우면 기간별 설정을 사용합니다.</p>
       <label>우리 집 납부 방식<select data-month-action="mode" aria-label="${month} 납부 방식"><option value="estimate" ${mode === 'estimate' ? 'selected' : ''}>면적 비례로 계산</option><option value="actual" ${mode === 'actual' ? 'selected' : ''}>세대 실제 납부액 직접 입력</option><option value="owner" ${mode === 'owner' ? 'selected' : ''}>소유자 직접 납부 · 제외</option></select></label>
       ${mode === 'actual' ? `<label>우리 집 장기수선비<input data-month-action="actual" inputmode="numeric" value="${e(draft.actual?.value ?? (Number.isSafeInteger(row.amount) ? won(row.amount) : ''))}" ${invalid('actual')} placeholder="예: 23,771" aria-label="${month} 우리 집 실제 납부액"></label><p class="help">관리비 전체가 아닌 장기수선비만 입력하세요. 면적 계산 대신 사용합니다.</p>` : ''}
       ${mode === 'estimate' ? `<label class="checkbox-label"><input type="checkbox" data-month-action="partial" ${partial ? 'checked' : ''}>이 달은 일부 기간만 계산</label>${partial ? `<div class="day-range"><label>시작일<input type="number" min="1" max="${maxDay}" data-month-action="fromDay" value="${e(draft.fromDay?.value ?? partial.fromDay)}" ${invalid('fromDay')} aria-label="${month} 일할 시작일"></label><span>~</span><label>마지막 일<input type="number" min="1" max="${maxDay}" data-month-action="toDay" value="${e(draft.toDay?.value ?? partial.toDay)}" ${invalid('toDay')} aria-label="${month} 일할 마지막 일"></label></div><p class="help">양 끝 날짜 포함 / 이 달의 ${maxDay}일 기준으로 나눕니다.</p>` : ''}` : ''}
@@ -141,7 +153,7 @@ function bind() {
   $('unit').addEventListener('change', () => {
     state.unit = $('unit').value;
     setMessage('unit-error'); dirty(); renderUnitArea(); renderMonthEditors();
-    $('refunded').value = state.refunds[state.unit] ? won(state.refunds[state.unit]) : '';
+    renderRefundInput();
   });
   for (const prefix of ['start','end']) {
     $(`${prefix}-year`).addEventListener('change', () => periodChanged(prefix));
@@ -178,12 +190,18 @@ function bind() {
   });
   $('monthly-details').addEventListener('toggle', renderMonthEditors);
   $('month-editors').addEventListener('change', editMonth);
+  $('month-editors').addEventListener('input', editMonth);
   $('month-editors').addEventListener('click', event => { if (event.target.dataset.monthAction === 'reset') editMonth(event); });
-  $('refunded').addEventListener('input', () => { dirty(); });
-  $('refunded').addEventListener('change', () => {
-    try { if (!state.unit) throw new Error('호수를 먼저 선택해 주세요.'); state.refunds[state.unit] = $('refunded').value.trim() ? parseMoney($('refunded').value, '반환받은 금액') : 0; dirty(); }
-    catch(error) { setMessage('options-error', error.message); }
-  });
+  const refundChanged = () => {
+    if (state.unit) state.refundInputs[state.unit] = $('refunded').value;
+    try {
+      if (!state.unit) throw new Error('호수를 먼저 선택해 주세요.');
+      state.refunds[state.unit] = refundFor(state.unit); setMessage('refund-error');
+    } catch(error) { setMessage('refund-error',error.message); }
+    dirty();
+  };
+  $('refunded').addEventListener('input',refundChanged);
+  $('refunded').addEventListener('change',refundChanged);
   $('calculator').addEventListener('submit', event => { event.preventDefault(); calculateAndRender(); });
   $('missing-notice').addEventListener('click', event => {
     const button = event.target.closest('[data-fill-start]');
@@ -197,6 +215,7 @@ function bind() {
 function editMonth(event) {
   const action = event.target.dataset.monthAction;
   if (!action) return;
+  if (event.type === 'input' && !['reserve','actual','fromDay','toDay'].includes(action)) return;
   const container = event.target.closest('[data-month]'), month = container.dataset.month;
   const household = activeHousehold(), row = { ...(household[month] || {}) };
   const errorNode = container.querySelector('.month-error');
@@ -217,21 +236,31 @@ function editMonth(event) {
       if (action === 'reset') { delete household[month]; delete state.monthly[month]; delete householdDrafts()[month]; delete state.drafts.reserve[month]; }
       else household[month] = row;
     }
-    clearDraft(month, action); event.target.removeAttribute('aria-invalid'); dirty(); renderMonthEditors();
+    clearDraft(month, action); event.target.removeAttribute('aria-invalid'); dirty();
+    if (['mode','partial','reset'].includes(action)) renderMonthEditors();
+    else {
+      const remaining = Object.values(draftsFor(month)).map(draft => draft.message).join(' ');
+      errorNode.textContent = remaining; errorNode.hidden = !remaining;
+      const reserve = reserveFor(month);
+      container.querySelector('.month-value').textContent = reserve.amount === null ? '금액 미입력' : `단지 ${won(reserve.amount)}원`;
+      container.querySelector('.reserve-source').textContent = `${reserve.source} · 위 칸을 비우면 기간별 설정을 사용합니다.`;
+    }
   } catch(error) { saveDraft(month,action,event.target.value,error.message); errorNode.textContent = error.message; errorNode.hidden = false; event.target.setAttribute('aria-invalid', 'true'); dirty(); }
 }
 
 function calculateAndRender(scroll = true) {
+  currentResult = null; $('result').hidden = true;
   for (const id of ['unit-error','form-error']) setMessage(id);
   try {
     if (!building.units.includes(state.unit)) { setMessage('unit-error', '우리 집 호수를 선택해 주세요.'); $('unit').focus(); return; }
     if (!state.start || !state.end) { setMessage('period-error', '시작월과 마지막 납부월을 모두 입력해 주세요.'); (!state.start ? $('start-month') : $('end-month')).focus(); return; }
     const invalidMonth = listMonths(state.start,state.end).find(month => Object.keys(draftsFor(month)).length);
     if (invalidMonth) { $('amount-options').open = true; $('monthly-details').open = true; renderMonthEditors(); const item = $('month-editors').querySelector(`[data-month="${invalidMonth}"]`); if (item) item.open = true; throw new Error(`${formatMonth(invalidMonth)}에 입력한 금액·날짜를 확인해 주세요.`); }
-    const refunded = $('refunded').value.trim() ? parseMoney($('refunded').value, '반환받은 금액') : 0;
+    state.refundInputs[state.unit] = $('refunded').value;
+    const refunded = refundFor(state.unit);
     state.refunds[state.unit] = refunded;
     const area = selectedArea();
-    const result = calculate({ start:state.start, end:state.end, area, totalArea:building.totalSupply, defaults, batch:state.batch, ranges:state.ranges, monthly:state.monthly, household:activeHousehold(), refunded });
+    const result = calculate({ start:state.start, end:state.end, area, totalArea:building.totalSupply, defaults, batch:state.batch, ranges:state.ranges, monthly:state.monthly, household:selectedHousehold(state.unit,state.start,state.end), refunded });
     if (result.missingAreaMonths.length) throw new Error('호수별 면적 자료를 확인해 주세요.');
     currentResult = result; renderResult();
     if (scroll) { $('result').focus({ preventScroll:true }); $('result').scrollIntoView({ behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start' }); }
@@ -242,30 +271,37 @@ function renderResult() {
   const result = currentResult;
   $('result').hidden = false;
   $('result-unit').textContent = `${state.unit}호 · ${(result.area / 100).toFixed(2)}㎡`;
-  const actualRows = result.rows.filter(row => row.mode === 'actual').length;
-  const estimatedRows = result.rows.filter(row => row.mode === 'estimate').length;
-  document.querySelector('.result-badge').textContent = actualRows ? (estimatedRows ? '입력액 포함 추정' : '직접 입력액 기준') : '면적 비례 추정';
+  const included = result.rows.filter(row => !row.isFuture && row.amount !== null);
+  const actualRows = included.filter(row => row.mode === 'actual').length;
+  const estimatedRows = included.filter(row => row.mode === 'estimate').length;
+  const ownerRows = included.filter(row => row.mode === 'owner').length;
+  document.querySelector('.result-badge').textContent = actualRows ? (estimatedRows ? '입력액 포함 추정' : '직접 입력액 기준') : estimatedRows ? '면적 비례 추정' : ownerRows ? '소유자 납부 제외' : '납부액 미계산';
   $('result-title').textContent = result.refunded ? '이미 돌려받은 금액을 뺀 정산액' : '현재까지 납부한 장기수선비';
   if (result.missingMonths.length) $('result-title').textContent += ' · 부분 합계';
   $('claim-value').textContent = won(result.claim);
   $('result-period').textContent = `${formatMonth(result.start)}~${formatMonth(result.end)} · ${result.count}개월`;
-  $('result-method').textContent = estimatedRows ? '관리비에 포함된 장기수선비를 우리 집 면적 비율로 나누어 계산했습니다.' : '직접 입력한 세대별 장기수선비를 합산했습니다.';
+  $('result-method').textContent = estimatedRows ? '관리비에 포함된 장기수선비를 우리 집 면적 비율로 나누어 계산했습니다.' : actualRows ? '직접 입력한 세대별 장기수선비를 합산했습니다.' : ownerRows ? '소유자가 직접 납부한 달은 임차인의 정산액에서 제외했습니다.' : '향후 예상액과 금액이 비어 있는 달을 확인해 주세요.';
   $('monthly-preview').textContent = `${result.count}개월 · 월별 금액과 조정 내역 확인`;
-  $('monthly-formula').textContent = `우리 집 ${(result.area / 100).toFixed(2)}㎡ ÷ 전체 ${(result.totalArea / 100).toLocaleString('ko-KR', {minimumFractionDigits:2})}㎡ = 약 ${(result.area / result.totalArea * 100).toFixed(2)}%`;
+  $('monthly-formula-title').textContent = estimatedRows ? '우리 집에 적용한 면적 비율' : '우리 집 면적 비율 (참고)';
+  $('monthly-formula').textContent = `${formatArea(result.area)}㎡ ÷ ${formatArea(result.totalArea)}㎡ ≈ ${formatFraction(result.area,result.totalArea,8)} (약 ${formatPercentage(result.area,result.totalArea)})`;
+  const roundingNotes = ['금액 계산에는 표시용 근삿값 대신 정확한 면적 비율을 사용합니다. 월별 금액은 반올림하지 않고 합산한 뒤 마지막에 원 단위로 반올림합니다.'];
+  if (result.rounding.pastAdjustment) roundingNotes.push(`과거·현재 월의 표시액 합은 ${won(result.rounding.pastDisplaySum)}원이지만, 각 월의 원 미만 금액까지 더한 뒤 반올림한 금액은 ${won(result.pastTotal)}원입니다. 차이 ${won(Math.abs(result.rounding.pastAdjustment))}원은 월별 표시 반올림 때문에 생깁니다.`);
+  if (result.rounding.futureAdjustment) roundingNotes.push(`향후 월의 표시액 합 ${won(result.rounding.futureDisplaySum)}원과 예상액 ${won(result.futureTotal)}원도 같은 이유로 다를 수 있습니다.`);
+  $('rounding-note').textContent = roundingNotes.join(' ');
   const breakdown = [];
   if (result.refunded) breakdown.push(['반환 전 계산액', `${won(result.pastTotal)}원`], ['이미 돌려받은 금액', `−${won(result.refunded)}원`]);
   if (result.actualTotal || result.rows.some(row => row.mode === 'actual')) breakdown.push(['직접 입력액 (과거·현재 월)', `${won(result.actualTotal)}원`], ['면적 추정액 (과거·현재 월)', `${won(result.estimatedTotal)}원`]);
   if (result.futureCount) breakdown.push([`향후 ${result.futureCount}개월 예상액 · 위 금액에 미포함`, `${won(result.futureTotal)}원`]);
   $('result-breakdown').innerHTML = breakdown.length ? `<div class="breakdown">${breakdown.map(([label, value]) => `<p><span>${e(label)}</span><strong>${e(value)}</strong></p>`).join('')}</div>` : '';
-  $('missing-notice').innerHTML = result.missingRanges.map(range => `<div class="notice"><strong>${e(range.start)}~${e(range.end)} 금액이 비어 있어요.</strong><br>이 기간은 합계에서 제외했어요. 금액 변경 옵션에서 입력하거나 기본 금액을 적용하세요.<button type="button" class="secondary-button" data-fill-start="${range.start}" data-fill-end="${range.end}">이 구간에도 월 280,000원 적용</button></div>`).join('');
+  $('missing-notice').innerHTML = result.missingRanges.map(range => `<div class="notice"><strong>${e(range.start)}~${e(range.end)} 금액이 비어 있어요.</strong><br>이 기간은 합계에서 제외했어요. 금액 변경 옵션에서 입력하거나 기본 금액을 적용하세요.<button type="button" class="secondary-button" data-fill-start="${range.start}" data-fill-end="${range.end}">이 구간에도 월 ${won(defaults.amount)}원 적용</button></div>`).join('');
   $('result-rows').innerHTML = result.rows.map(row => `<tr><td>${row.month}${row.isFuture ? '<br><small>향후 예상</small>' : ''}</td><td>${row.reserve === null ? '미입력' : won(row.reserve)}</td><td>${row.amount === null ? '제외' : won(row.amount)}</td><td>${e(row.source)}<br><small>${e(row.reserveSource)}${row.difference !== null && row.difference !== 0 ? `<br>면적 추정 ${won(row.referenceEstimate)}원과 ${row.difference > 0 ? '+' : '−'}${won(Math.abs(row.difference))}원 차이` : ''}</small></td></tr>`).join('');
 }
 
 function renderLegal() {
   $('legal-entries').innerHTML = legal.entries.map(entry => `<div class="legal-entry"><p class="legal-condition">${e(entry.condition)}</p><blockquote>${e(entry.quote)}</blockquote><a href="${e(entry.url)}" target="_blank" rel="noopener noreferrer">${e(entry.title)} ↗</a></div>`).join('');
   $('source-content').innerHTML = `
-    <section class="source-block"><h3>계산은 이렇게 해요</h3><div class="formula-steps"><span>단지의 월 장기수선비</span><b aria-hidden="true">×</b><span>우리 집 면적</span><b aria-hidden="true">÷</b><span>전체 면적</span></div><p>이렇게 구한 우리 집 월별 금액을 선택한 기간 동안 더합니다. 전체 공급면적은 <strong>1,763.07㎡</strong>입니다.</p></section>
-    <section class="source-block"><h3>기본 금액과 납부 가정</h3><dl class="source-facts"><div><dt>기본 기간</dt><dd>2024년 1월~2026년 12월</dd></div><div><dt>단지 월 금액</dt><dd>280,000원</dd></div><div><dt>납부 방식</dt><dd>관리비에 포함해 면적 비율만큼 납부한 것으로 가정</dd></div></dl><p>금액이 바뀐 달은 ‘금액이 달랐다면 변경하기’에서 조정할 수 있어요. 미래 월은 향후 예상액으로 따로 표시합니다.</p></section>
+    <section class="source-block"><h3>계산은 이렇게 해요</h3><div class="formula-steps"><span>단지의 월 장기수선비</span><b aria-hidden="true">×</b><span>우리 집 면적</span><b aria-hidden="true">÷</b><span>전체 면적</span></div><p>이렇게 구한 우리 집 월별 금액을 선택한 기간 동안 더합니다. 전체 공급면적은 <strong>${formatArea(building.totalSupply)}㎡</strong>입니다.</p></section>
+    <section class="source-block"><h3>기본 금액과 납부 가정</h3><dl class="source-facts"><div><dt>기본 기간</dt><dd>${e(formatMonth(defaults.from))}~${e(formatMonth(defaults.to))}</dd></div><div><dt>단지 월 금액</dt><dd>${won(defaults.amount)}원</dd></div><div><dt>납부 방식</dt><dd>관리비에 포함해 면적 비율만큼 납부한 것으로 가정</dd></div></dl><p>금액이 바뀐 달은 ‘금액이 달랐다면 변경하기’에서 조정할 수 있어요. 미래 월은 향후 예상액으로 따로 표시합니다.</p></section>
     <section class="source-block"><h3>호수별 면적</h3><p>제공해 주신 호별 자료를 반영했습니다. 계산에는 공급면적을 사용하며, A·B는 타입 표시입니다.</p><div class="table-wrap" tabindex="0" role="region" aria-label="호수별 공급면적과 전용면적 표"><table><caption class="sr-only">호수별 면적, 단위 제곱미터</caption><thead><tr><th scope="col">호수</th><th scope="col">공급면적 ㎡</th><th scope="col">전용면적 ㎡</th></tr></thead><tbody>${building.units.map(unit => { const type = unitType(unit); return `<tr><th scope="row">${unit}호</th><td>${(type.supply/100).toFixed(2)}${type.variant ? ` <small class="type-tag">${e(type.variant)}</small>` : ''}</td><td>${(type.exclusive/100).toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div></section>
     <section class="source-block"><h3>자료 출처</h3><p>호수와 면적의 연결은 사용자 제공 자료를, 공급·전용 면적 타입은 아래 공개 자료를 참고했습니다.</p><div class="source-links">${building.sources.map(source => `<a href="${e(source.url)}" target="_blank" rel="noopener noreferrer"><span>${e(source.title)}</span><span class="source-link-action">새 창 <span aria-hidden="true">↗</span></span></a>`).join('')}</div><p class="help">공개 자료 확인일: ${e(building.checkedAt)}</p></section>
 `;
@@ -280,7 +316,7 @@ function registerAgentTool() {
     const months = listMonths(input.start,input.end);
     const area = selectedArea(input.unit);
     if (months.some(month => state.drafts.reserve[month] || Object.keys(state.drafts.households[input.unit]?.[month] || {}).length)) throw new Error('화면에서 월별 입력 오류를 먼저 수정해 주세요.');
-    calculate({ start:input.start,end:input.end,area,totalArea:building.totalSupply,defaults,batch:state.batch,ranges:state.ranges,monthly:state.monthly,household:state.households[input.unit] || {},refunded:state.refunds[input.unit] || 0 });
+    calculate({ start:input.start,end:input.end,area,totalArea:building.totalSupply,defaults,batch:state.batch,ranges:state.ranges,monthly:state.monthly,household:selectedHousehold(input.unit,input.start,input.end),refunded:refundFor(input.unit) });
     state.unit = input.unit; state.start = input.start; state.end = input.end;
     dirty(); syncForm(); calculateAndRender(false);
     if (!currentResult) throw new Error($('form-error').textContent || '입력값을 확인해 주세요.');

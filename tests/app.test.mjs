@@ -7,14 +7,17 @@ import * as output from '../site/js/format.js';
 
 // DOM integration tests exercise the real app entry and user events.
 // No external browser or network is required, and this is not visual QA.
-async function setup(t, saved = null) {
+async function setup(t, saved = null, transformData = null) {
   const window = new Window({url:'http://localhost:4173/awon-repair-refund/',settings:{disableCSSFileLoading:true,disableJavaScriptFileLoading:true}});
   t.after(() => window.happyDOM.abort());
   const html = (await readFile(new URL('../site/index.html',import.meta.url),'utf8')).replace(/<script\b[^>]*>[\s\S]*?<\/script>/g,'');
   window.document.write(html);
   Object.assign(window,calc,output,{ e:output.escapeHTML });
   window.HTMLElement.prototype.scrollIntoView = function() {};
-  window.fetch = async url => ({ok:true,json:async()=>JSON.parse(await readFile(new URL(url),'utf8'))});
+  window.fetch = async url => ({ok:true,json:async()=>{
+    const data=JSON.parse(await readFile(new URL(url),'utf8'));
+    return transformData ? transformData(new URL(url).pathname.split('/').at(-1),data) : data;
+  }});
   const tools = new Map();
   window.document.modelContext = {registerTool(tool){tools.set(tool.name,tool);}};
   if (saved) window.localStorage.setItem('awon-repair-refund-v1',saved);
@@ -142,4 +145,89 @@ test('details explain the selected calculation and legal basis is last',async t=
   assert.match($('legal-details').querySelector('summary').textContent,/법적 근거/);
   assert.equal($('legal-details').querySelector('summary').getAttribute('aria-controls'),'legal-content');
   assert.equal($('copy-result'),null);assert.equal($('print-result'),null);assert.equal($('print-sheet'),null);
+});
+
+test('typing a monthly amount updates calculation before blur without replacing the input',async t=>{
+  const {window,$,change,period,submit,openMonths}=await setup(t);
+  change('unit','601');period('2024-01','2024-01');submit();
+  assert.equal($('claim-value').textContent,'11,246');openMonths();
+  const input=$('month-editors').querySelector('[data-month-action="reserve"]');input.focus();
+  change(input,'560000','input');
+  assert.equal($('result').hidden,true);
+  assert.equal(window.document.activeElement,input);assert(input.isConnected);
+  assert.match($('month-editors').querySelector('.reserve-source').textContent,/월별 수정/);
+  submit();assert.equal($('claim-value').textContent,'22,491');
+});
+test('actual amount and partial days apply on input, without waiting for change',async t=>{
+  const {window,$,change,period,submit,openMonths}=await setup(t);
+  change('unit','601');period('2024-01','2024-01');openMonths();
+  change($('month-editors').querySelector('[data-month-action="mode"]'),'actual');
+  change($('month-editors').querySelector('[data-month-action="actual"]'),'15000','input');submit();
+  assert.equal($('claim-value').textContent,'15,000');
+  change($('month-editors').querySelector('[data-month-action="mode"]'),'estimate');
+  const partial=$('month-editors').querySelector('[data-month-action="partial"]');partial.checked=true;partial.dispatchEvent(new window.Event('change',{bubbles:true}));
+  const day=$('month-editors').querySelector('[data-month-action="fromDay"]');day.focus();change(day,'31','input');
+  assert.equal(window.document.activeElement,day);submit();assert.equal($('claim-value').textContent,'363');
+});
+test('typed refund reaches tool calculation; invalid refund survives unit switching and recovers',async t=>{
+  const {$,change,period,submit,tools}=await setup(t);
+  change('unit','601');period('2024-01','2024-01');submit();
+  change('refunded','1000','input');assert.equal($('result').hidden,true);
+  const tool=tools.get('calculate_awon_refund');
+  assert.equal(tool.execute({unit:'601',start:'2024-01',end:'2024-01'}).claim,10246);
+  assert.equal($('refunded').value,'1000');
+  change('refunded','-500','input');
+  assert.throws(()=>tool.execute({unit:'601',start:'2024-01',end:'2024-01'}));
+  assert.equal($('refunded').value,'-500');
+  change('unit','101');assert.equal($('refunded').value,'');
+  change('unit','601');assert.equal($('refunded').value,'-500');assert.equal($('refund-error').hidden,false);
+  change('refunded','1000','input');assert.equal($('refund-error').hidden,true);
+  submit();assert.equal($('claim-value').textContent,'10,246');assert.equal($('options-error').hidden,true);
+});
+test('failed submission cannot leave an earlier successful result visible',async t=>{
+  const {$,change,period,submit}=await setup(t);
+  change('unit','601');period('2024-01','2024-01');submit();assert.equal($('result').hidden,false);
+  $('refunded').value='-1';submit();
+  assert.equal($('result').hidden,true);assert.equal($('form-error').hidden,false);
+});
+test('an unfinished actual amount outside the selected period does not block valid months',async t=>{
+  const {$,change,period,submit,openMonths}=await setup(t);
+  change('unit','601');period('2024-01','2024-02');openMonths();
+  change($('month-editors').querySelector('[data-month="2024-02"] [data-month-action="mode"]'),'actual');
+  change('end-month','01');submit();assert.equal($('claim-value').textContent,'11,246');assert.equal($('result').hidden,false);
+  change('end-month','02');submit();assert.equal($('result').hidden,true);assert.equal($('form-error').hidden,false);
+});
+test('owner-only calculation describes exclusion rather than payment or estimation',async t=>{
+  const {$,change,period,submit,openMonths}=await setup(t);
+  change('unit','601');period('2024-01','2024-01');openMonths();
+  change($('month-editors').querySelector('[data-month-action="mode"]'),'owner');submit();
+  assert.equal($('claim-value').textContent,'0');assert.match($('result-method').textContent,/제외/);
+  assert.equal($('result').querySelector('.result-badge').textContent,'소유자 납부 제외');
+  assert.match($('monthly-formula-title').textContent,/참고/);
+});
+test('displayed approximate ratio and explicit rounding difference agree with 601 calculation',async t=>{
+  const {$,change,period,submit}=await setup(t);
+  change('unit','601');period('2024-01','2025-12');submit();
+  assert.equal($('claim-value').textContent,'269,895');
+  assert.match($('monthly-formula').textContent,/70\.81㎡ ÷ 1,763\.07㎡ ≈ 0\.04016290 \(약 4\.0163%\)/);
+  assert.match($('rounding-note').textContent,/269,904/);assert.match($('rounding-note').textContent,/269,895/);assert.match($('rounding-note').textContent,/차이 9원/);
+  assert.match($('rounding-note').textContent,/더한 뒤 반올림/);
+});
+test('malformed money separators remain visible as errors instead of calculating another amount',async t=>{
+  const {$,change,period,submit,openMonths}=await setup(t);
+  change('unit','601');period('2024-01','2024-01');openMonths();
+  const input=$('month-editors').querySelector('[data-month-action="reserve"]');
+  change(input,'28,00','input');submit();assert.equal($('result').hidden,true);assert.equal($('form-error').hidden,false);
+  const replacement=$('month-editors').querySelector('[data-month-action="reserve"]');
+  assert.equal(replacement.value,'28,00');change(replacement,'280,000','input');submit();assert.equal($('claim-value').textContent,'11,246');
+});
+test('formula labels follow data changes instead of hardcoded area and reserve values',async t=>{
+  const {$,change,period,submit}=await setup(t,null,(file,data)=>{
+    if(file==='building.json') {data.totalSupply*=2;for(const type of data.areaTypes) type.supply*=2;}
+    if(file==='reserve-defaults.json') {data.amount=300000;data.from='2023-01';data.to='2025-12';}
+    return data;
+  });
+  assert.match($('source-content').textContent,/3,526.14㎡/);assert.match($('source-content').textContent,/300,000원/);assert.match($('source-content').textContent,/2023년 1월/);
+  change('unit','601');period('2024-01','2024-01');submit();
+  assert.equal($('claim-value').textContent,'12,049');assert.match($('monthly-formula').textContent,/141.62㎡ ÷ 3,526.14㎡/);
 });

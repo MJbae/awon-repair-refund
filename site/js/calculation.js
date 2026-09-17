@@ -39,9 +39,9 @@ export function validateMoney(value, label = '금액') {
   return value;
 }
 export function parseMoney(value, label = '금액') {
-  const text = String(value).trim().replaceAll(',', '');
-  if (!/^\d+$/.test(text)) throw new Error(`${label}을 원 단위 숫자로 입력해 주세요.`);
-  return validateMoney(Number(text), label);
+  const text = String(value).trim();
+  if (!/^(?:\d+|[1-9]\d{0,2}(?:,\d{3})+)$/.test(text)) throw new Error(`${label}을 원 단위 숫자로 입력해 주세요. 쉼표는 280,000처럼 세 자리마다 사용합니다.`);
+  return validateMoney(Number(text.replaceAll(',', '')), label);
 }
 export function parseArea(value) {
   const text = String(value).trim();
@@ -61,12 +61,43 @@ export function groupMonths(months) {
   return groups;
 }
 export function validateRanges(ranges) {
-  const sorted = [...ranges].sort((a, b) => a.start.localeCompare(b.start));
-  sorted.forEach((range, index) => {
+  if (!Array.isArray(ranges)) throw new Error('금액 변경 기간은 목록이어야 합니다.');
+  for (const range of ranges) {
+    requireRecord(range, '금액 변경 기간');
     listMonths(range.start, range.end);
     validateMoney(range.amount);
+  }
+  const sorted = [...ranges].sort((a, b) => a.start.localeCompare(b.start));
+  sorted.forEach((range, index) => {
     if (index && sorted[index - 1].end >= range.start) throw new Error('금액 변경 기간이 겹칩니다. 기존 기간을 수정하거나 범위를 나누어 주세요.');
   });
+}
+
+function requireRecord(value, label) {
+  if (!value || Object.prototype.toString.call(value) !== '[object Object]') throw new Error(`${label}의 데이터 형식을 확인해 주세요.`);
+}
+function validateInputs({defaults,batch,monthly,household}) {
+  if (defaults !== undefined && defaults !== null) {
+    requireRecord(defaults, '기본 금액');
+    if (monthIndex(defaults.from) > monthIndex(defaults.to)) throw new Error('기본 금액의 적용 기간이 뒤바뀌었습니다.');
+    validateMoney(defaults.amount, '기본 금액');
+  }
+  for (const [label, map] of [['일괄 금액',batch],['월별 금액',monthly]]) {
+    requireRecord(map,label);
+    for (const [month,amount] of Object.entries(map)) { monthIndex(month); validateMoney(amount,label); }
+  }
+  requireRecord(household,'세대별 납부 내역');
+  for (const [month,entry] of Object.entries(household)) {
+    monthIndex(month); requireRecord(entry,'월별 납부 내역');
+    const mode = Object.hasOwn(entry,'mode') ? entry.mode : 'estimate';
+    if (!['estimate','actual','owner'].includes(mode)) throw new Error('월별 납부 방식이 올바르지 않습니다.');
+    if (mode === 'actual') validateMoney(entry.amount,'세대 직접 입력액');
+    if (mode === 'estimate' && Object.hasOwn(entry,'partial')) {
+      requireRecord(entry.partial,'부분월 납부 기간');
+      const {fromDay,toDay} = entry.partial;
+      if (!Number.isInteger(fromDay) || !Number.isInteger(toDay) || fromDay < 1 || toDay > daysInMonth(month) || fromDay > toDay) throw new Error(`${formatMonth(month)}의 납부 일수 범위를 확인해 주세요.`);
+    }
+  }
 }
 
 // Exact fractions prevent both floating point and monthly rounding errors.
@@ -89,6 +120,7 @@ export function calculate({ start, end, asOfMonth = currentMonth(), area = null,
   const months = listMonths(start, end);
   monthIndex(asOfMonth);
   validateRanges(ranges);
+  validateInputs({defaults,batch,monthly,household});
   validateMoney(refunded, '반환받은 금액');
   if (!Number.isSafeInteger(totalArea) || totalArea <= 0) throw new Error('전체 기준 면적을 확인해 주세요.');
   if (area !== null && (!Number.isSafeInteger(area) || area <= 0 || area > totalArea)) throw new Error('세대 면적은 전체 기준 면적 이하의 양수여야 합니다.');
@@ -126,12 +158,16 @@ export function calculate({ start, end, asOfMonth = currentMonth(), area = null,
     return { month, reserve: reserve.amount, reserveSource: reserve.source, amount: value === null ? null : rounded(value), source, mode, isFuture, usedDays, days, referenceEstimate, difference };
   });
   const pastTotal = rounded(past);
+  const futureTotal = rounded(future), total = rounded(plus(past,future));
+  const pastDisplaySum = rows.filter(row => !row.isFuture && row.amount !== null).reduce((sum,row) => sum + row.amount,0);
+  const futureDisplaySum = rows.filter(row => row.isFuture && row.amount !== null).reduce((sum,row) => sum + row.amount,0);
   if (refunded > pastTotal) throw new Error('반환받은 금액이 현재까지 계산한 금액보다 큽니다. 기간과 금액을 확인해 주세요.');
   return {
     start, end, asOfMonth, area, totalArea, rows, count: months.length,
-    pastTotal, futureTotal: rounded(future), total: rounded(plus(past, future)),
+    pastTotal, futureTotal, total,
     actualTotal: rounded(actual), estimatedTotal: rounded(estimated), refunded,
     claim: pastTotal - refunded, futureCount: rows.filter(r => r.isFuture).length,
-    missingMonths, missingReserveMonths, missingAreaMonths, missingRanges: groupMonths(missingReserveMonths)
+    missingMonths, missingReserveMonths, missingAreaMonths, missingRanges: groupMonths(missingReserveMonths),
+    rounding: {pastDisplaySum,futureDisplaySum,pastAdjustment:pastTotal-pastDisplaySum,futureAdjustment:futureTotal-futureDisplaySum,splitTotalAdjustment:total-pastTotal-futureTotal}
   };
 }

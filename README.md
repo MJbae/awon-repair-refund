@@ -33,7 +33,7 @@ npm run dev
 npm run check
 ```
 
-계산·DOM 입력 흐름 테스트, 자료 검증, JavaScript 문법 검사 후 `dist/`에 공개할 정적 파일만 모읍니다. 세부 검증 범위는 [검증 기록](docs/VERIFICATION.md)을 참고하세요.
+계산·DOM 입력 흐름 테스트, Python의 독립 분수 계산과 1,641개 사례 비교, 자료 검증, JavaScript 문법 검사 후 `dist/`에 공개할 정적 파일만 모읍니다. 정밀 검산에는 Python 3.10 이상이 필요합니다. 추가로 `npm run test:mutations`를 실행하면 9종 계산 오류를 테스트가 잡아내는지 확인합니다. [계산 정밀도 검증](docs/CALCULATION_AUDIT.md)과 [검증 기록](docs/VERIFICATION.md)에 결과를 정리했습니다.
 
 원본 `images/`, `docs/private/`, 로컬 입력 내역은 Git 추적·배포에서 제외합니다. 빌드 스크립트도 허용된 공개 파일 10개와 `.nojekyll`만 복사합니다.
 
@@ -48,9 +48,9 @@ git commit -m "Update Awon repair refund calculator"
 git push -u origin main
 ```
 
-저장소의 **Settings → Pages → Source → GitHub Actions**를 선택하면 포함된 워크플로가 검증 후 `dist/`를 배포합니다. Pages 설정 후 필요하면 Actions에서 수동 실행할 수 있습니다. PR에서는 검증만 진행합니다.
+저장소의 **Settings → Pages → Source**는 **GitHub Actions**로 설정했습니다. 포함된 워크플로가 검증 후 `dist/`를 배포합니다. `Deploy from a branch`의 `main /`로 바꾸면 계산기 대신 루트 README가 게시되므로 이 설정을 유지합니다. 필요하면 Actions에서 수동 실행할 수 있습니다. PR에서는 검증만 진행합니다.
 
-Pages 활성화 후 배포 주소는 `https://MJbae.github.io/awon-repair-refund/`이며 모든 앱 자산은 상대 경로를 사용합니다. 로컬에서도 `/awon-repair-refund/` 경로로 실행해 볼 수 있습니다.
+배포 주소는 [아원데코빌 계산기](https://mjbae.github.io/awon-repair-refund/)이며 모든 앱 자산은 상대 경로를 사용합니다. 로컬에서도 `/awon-repair-refund/` 경로로 실행해 볼 수 있습니다.
 
 ## 자료 수정
 

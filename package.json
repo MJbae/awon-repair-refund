@@ -10,9 +10,11 @@
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "test": "node --test tests/*.test.mjs",
+    "test:precision": "node scripts/test-precision.mjs",
+    "test:mutations": "node scripts/test-precision.mjs --mutations",
     "validate": "node scripts/validate-data.mjs",
     "build": "npm run validate && node scripts/prepare-pages.mjs",
-    "check": "npm run test && npm run build"
+    "check": "npm run test && npm run test:precision && npm run build"
   },
   "devDependencies": {
     "happy-dom": "20.14.5"
