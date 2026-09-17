@@ -136,11 +136,11 @@ function renderMonthEditors() {
     const reserve = reserveFor(month), row = household[month] || {}, mode = row.mode || 'estimate';
     const partial = row.partial, maxDay = daysInMonth(month), draft = draftsFor(month);
     const invalid = action => draft[action] ? 'aria-invalid="true"' : '';
-    return `<details class="month-item" data-month="${month}" ${openMonths.has(month) ? 'open' : ''}><summary>${e(formatMonth(month))}<span class="month-value">${reserve.amount === null ? '금액 미입력' : `단지 ${won(reserve.amount)}원`}</span></summary><div class="month-controls">
-      <label>단지 월 장기수선비<input data-month-action="reserve" inputmode="numeric" value="${e(draft.reserve?.value ?? (Object.hasOwn(state.monthly, month) ? won(state.monthly[month]) : ''))}" ${invalid('reserve')} placeholder="${reserve.amount === null ? '금액 입력' : won(reserve.amount)}" aria-label="${month} 단지 월 금액"></label>
-      <p class="help reserve-source">${e(reserve.source)} · 위 칸을 비우면 기간별 설정을 사용합니다.</p>
+    return `<details class="month-item" data-month="${month}" ${openMonths.has(month) ? 'open' : ''}><summary>${e(formatMonth(month))}<span class="month-value">${reserve.amount === null ? '금액 미입력' : `전체 ${won(reserve.amount)}원`}</span></summary><div class="month-controls">
+      <label>전체 월 적립액<input data-month-action="reserve" inputmode="numeric" value="${e(draft.reserve?.value ?? (Object.hasOwn(state.monthly, month) ? won(state.monthly[month]) : ''))}" ${invalid('reserve')} placeholder="${reserve.amount === null ? '금액 입력' : won(reserve.amount)}" aria-label="${month} 전체 월 적립액"></label>
+      <p class="help reserve-source">${e(reserve.source)} · 비우면 기존 설정 적용</p>
       <label>우리 집 납부 방식<select data-month-action="mode" aria-label="${month} 납부 방식"><option value="estimate" ${mode === 'estimate' ? 'selected' : ''}>면적 비례로 계산</option><option value="actual" ${mode === 'actual' ? 'selected' : ''}>세대 실제 납부액 직접 입력</option><option value="owner" ${mode === 'owner' ? 'selected' : ''}>소유자 직접 납부 · 제외</option></select></label>
-      ${mode === 'actual' ? `<label>우리 집 장기수선비<input data-month-action="actual" inputmode="numeric" value="${e(draft.actual?.value ?? (Number.isSafeInteger(row.amount) ? won(row.amount) : ''))}" ${invalid('actual')} placeholder="예: 23,771" aria-label="${month} 우리 집 실제 납부액"></label><p class="help">관리비 전체가 아닌 장기수선비만 입력하세요. 면적 계산 대신 사용합니다.</p>` : ''}
+      ${mode === 'actual' ? `<label>우리 집 장기수선비<input data-month-action="actual" inputmode="numeric" value="${e(draft.actual?.value ?? (Number.isSafeInteger(row.amount) ? won(row.amount) : ''))}" ${invalid('actual')} placeholder="예: 23,771" aria-label="${month} 우리 집 실제 납부액"></label><p class="help">관리비 전체가 아닌 장기수선비만 입력하세요.</p>` : ''}
       ${mode === 'estimate' ? `<label class="checkbox-label"><input type="checkbox" data-month-action="partial" ${partial ? 'checked' : ''}>이 달은 일부 기간만 계산</label>${partial ? `<div class="day-range"><label>시작일<input type="number" min="1" max="${maxDay}" data-month-action="fromDay" value="${e(draft.fromDay?.value ?? partial.fromDay)}" ${invalid('fromDay')} aria-label="${month} 일할 시작일"></label><span>~</span><label>마지막 일<input type="number" min="1" max="${maxDay}" data-month-action="toDay" value="${e(draft.toDay?.value ?? partial.toDay)}" ${invalid('toDay')} aria-label="${month} 일할 마지막 일"></label></div><p class="help">양 끝 날짜 포함 / 이 달의 ${maxDay}일 기준으로 나눕니다.</p>` : ''}` : ''}
       <button type="button" class="text-button month-reset" data-month-action="reset">이 달 수정 취소</button><p class="error month-error" ${Object.keys(draft).length ? '' : 'hidden'}>${e(Object.values(draft).map(d => d.message).join(' '))}</p></div></details>`;
   }).join('');
@@ -243,8 +243,8 @@ function editMonth(event) {
       const remaining = Object.values(draftsFor(month)).map(draft => draft.message).join(' ');
       errorNode.textContent = remaining; errorNode.hidden = !remaining;
       const reserve = reserveFor(month);
-      container.querySelector('.month-value').textContent = reserve.amount === null ? '금액 미입력' : `단지 ${won(reserve.amount)}원`;
-      container.querySelector('.reserve-source').textContent = `${reserve.source} · 위 칸을 비우면 기간별 설정을 사용합니다.`;
+      container.querySelector('.month-value').textContent = reserve.amount === null ? '금액 미입력' : `전체 ${won(reserve.amount)}원`;
+      container.querySelector('.reserve-source').textContent = `${reserve.source} · 비우면 기존 설정 적용`;
     }
   } catch(error) { saveDraft(month,action,event.target.value,error.message); errorNode.textContent = error.message; errorNode.hidden = false; event.target.setAttribute('aria-invalid', 'true'); dirty(); }
 }
@@ -281,14 +281,10 @@ function renderResult() {
   if (result.missingMonths.length) $('result-title').textContent += ' · 부분 합계';
   $('claim-value').textContent = won(result.claim);
   $('result-period').textContent = `${formatMonth(result.start)}~${formatMonth(result.end)} · ${result.count}개월`;
-  $('result-method').textContent = estimatedRows ? '관리비에 포함된 장기수선비를 우리 집 면적 비율로 나누어 계산했습니다.' : actualRows ? '직접 입력한 세대별 장기수선비를 합산했습니다.' : ownerRows ? '소유자가 직접 납부한 달은 임차인의 정산액에서 제외했습니다.' : '향후 예상액과 금액이 비어 있는 달을 확인해 주세요.';
+  $('result-method').textContent = estimatedRows ? '관리비에 포함해 납부한 것으로 계산했습니다.' : actualRows ? '직접 입력한 세대별 장기수선비를 합산했습니다.' : ownerRows ? '소유자가 직접 납부한 달은 임차인의 정산액에서 제외했습니다.' : '향후 예상액과 금액이 비어 있는 달을 확인해 주세요.';
   $('monthly-preview').textContent = `${result.count}개월 · 월별 금액과 조정 내역 확인`;
-  $('monthly-formula-title').textContent = estimatedRows ? '우리 집에 적용한 면적 비율' : '우리 집 면적 비율 (참고)';
+  $('monthly-formula-title').textContent = estimatedRows ? '우리 집 면적 비율' : '우리 집 면적 비율 (참고)';
   $('monthly-formula').textContent = `${formatArea(result.area)}㎡ ÷ ${formatArea(result.totalArea)}㎡ ≈ ${formatFraction(result.area,result.totalArea,8)} (약 ${formatPercentage(result.area,result.totalArea)})`;
-  const roundingNotes = ['금액 계산에는 표시용 근삿값 대신 정확한 면적 비율을 사용합니다. 월별 금액은 반올림하지 않고 합산한 뒤 마지막에 원 단위로 반올림합니다.'];
-  if (result.rounding.pastAdjustment) roundingNotes.push(`과거·현재 월의 표시액 합은 ${won(result.rounding.pastDisplaySum)}원이지만, 각 월의 원 미만 금액까지 더한 뒤 반올림한 금액은 ${won(result.pastTotal)}원입니다. 차이 ${won(Math.abs(result.rounding.pastAdjustment))}원은 월별 표시 반올림 때문에 생깁니다.`);
-  if (result.rounding.futureAdjustment) roundingNotes.push(`향후 월의 표시액 합 ${won(result.rounding.futureDisplaySum)}원과 예상액 ${won(result.futureTotal)}원도 같은 이유로 다를 수 있습니다.`);
-  $('rounding-note').textContent = roundingNotes.join(' ');
   const breakdown = [];
   if (result.refunded) breakdown.push(['반환 전 계산액', `${won(result.pastTotal)}원`], ['이미 돌려받은 금액', `−${won(result.refunded)}원`]);
   if (result.actualTotal || result.rows.some(row => row.mode === 'actual')) breakdown.push(['직접 입력액 (과거·현재 월)', `${won(result.actualTotal)}원`], ['면적 추정액 (과거·현재 월)', `${won(result.estimatedTotal)}원`]);
@@ -301,10 +297,10 @@ function renderResult() {
 function renderLegal() {
   $('legal-entries').innerHTML = legal.entries.map(entry => `<div class="legal-entry"><p class="legal-condition">${e(entry.condition)}</p><blockquote>${e(entry.quote)}</blockquote><a href="${e(entry.url)}" target="_blank" rel="noopener noreferrer">${e(entry.title)} ↗</a></div>`).join('');
   $('source-content').innerHTML = `
-    <section class="source-block"><h3>계산은 이렇게 해요</h3><div class="formula-steps"><span>단지의 월 장기수선비</span><b aria-hidden="true">×</b><span>우리 집 면적</span><b aria-hidden="true">÷</b><span>전체 면적</span></div><p>이렇게 구한 우리 집 월별 금액을 선택한 기간 동안 더합니다. 전체 공급면적은 <strong>${formatArea(building.totalSupply)}㎡</strong>입니다.</p></section>
-    <section class="source-block"><h3>기본 금액과 납부 가정</h3><dl class="source-facts"><div><dt>기본 기간</dt><dd>${e(formatMonth(defaults.from))}~${e(formatMonth(defaults.to))}</dd></div><div><dt>단지 월 금액</dt><dd>${won(defaults.amount)}원</dd></div><div><dt>납부 방식</dt><dd>관리비에 포함해 면적 비율만큼 납부한 것으로 가정</dd></div></dl><p>금액이 바뀐 달은 ‘계산 기준 확인·변경’에서 조정할 수 있어요. 미래 월은 향후 예상액으로 따로 표시합니다.</p></section>
-    <section class="source-block"><h3>호수별 면적</h3><p>제공해 주신 호별 자료를 반영했습니다. 계산에는 공급면적을 사용하며, A·B는 타입 표시입니다.</p><div class="table-wrap" tabindex="0" role="region" aria-label="호수별 공급면적과 전용면적 표"><table><caption class="sr-only">호수별 면적, 단위 제곱미터</caption><thead><tr><th scope="col">호수</th><th scope="col">공급면적 ㎡</th><th scope="col">전용면적 ㎡</th></tr></thead><tbody>${building.units.map(unit => { const type = unitType(unit); return `<tr><th scope="row">${unit}호</th><td>${(type.supply/100).toFixed(2)}${type.variant ? ` <small class="type-tag">${e(type.variant)}</small>` : ''}</td><td>${(type.exclusive/100).toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div></section>
-    <section class="source-block"><h3>자료 출처</h3><p>호수와 면적의 연결은 사용자 제공 자료를, 공급·전용 면적 타입은 아래 공개 자료를 참고했습니다.</p><div class="source-links">${building.sources.map(source => `<a href="${e(source.url)}" target="_blank" rel="noopener noreferrer"><span>${e(source.title)}</span><span class="source-link-action">새 창 <span aria-hidden="true">↗</span></span></a>`).join('')}</div><p class="help">공개 자료 확인일: ${e(building.checkedAt)}</p></section>
+    <section class="source-block"><h3>계산은 이렇게 해요</h3><div class="formula-steps"><span>전체 월 적립액</span><b aria-hidden="true">×</b><span>우리 집 면적</span><b aria-hidden="true">÷</b><span>전체 면적</span></div><p>전체 공급면적 <strong>${formatArea(building.totalSupply)}㎡</strong> · 선택 기간의 월별 금액 합산</p></section>
+    <section class="source-block"><h3>기본 금액과 납부 가정</h3><dl class="source-facts"><div><dt>기본 기간</dt><dd>${e(formatMonth(defaults.from))}~${e(formatMonth(defaults.to))}</dd></div><div><dt>전체 월 적립액</dt><dd>${won(defaults.amount)}원</dd></div><div><dt>납부 방식</dt><dd>관리비에 포함해 면적 비율만큼 납부한 것으로 가정</dd></div></dl></section>
+    <section class="source-block"><h3>호수별 면적</h3><p>공급면적 기준 · A/B는 면적 타입</p><div class="table-wrap" tabindex="0" role="region" aria-label="호수별 공급면적과 전용면적 표"><table><caption class="sr-only">호수별 면적, 단위 제곱미터</caption><thead><tr><th scope="col">호수</th><th scope="col">공급면적 ㎡</th><th scope="col">전용면적 ㎡</th></tr></thead><tbody>${building.units.map(unit => { const type = unitType(unit); return `<tr><th scope="row">${unit}호</th><td>${(type.supply/100).toFixed(2)}${type.variant ? ` <small class="type-tag">${e(type.variant)}</small>` : ''}</td><td>${(type.exclusive/100).toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div></section>
+    <section class="source-block"><h3>자료 출처</h3><p>호수별 면적은 제공 자료, 면적 타입은 아래 출처를 참고했습니다.</p><div class="source-links">${building.sources.map(source => `<a href="${e(source.url)}" target="_blank" rel="noopener noreferrer"><span>${e(source.title)}</span><span class="source-link-action">새 창 <span aria-hidden="true">↗</span></span></a>`).join('')}</div><p class="help">공개 자료 확인일: ${e(building.checkedAt)}</p></section>
 `;
 }
 

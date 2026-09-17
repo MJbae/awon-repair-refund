@@ -212,13 +212,11 @@ test('owner-only calculation describes exclusion rather than payment or estimati
   assert.equal($('result').querySelector('.result-badge').textContent,'소유자 납부 제외');
   assert.match($('monthly-formula-title').textContent,/참고/);
 });
-test('displayed approximate ratio and explicit rounding difference agree with 601 calculation',async t=>{
+test('displayed approximate ratio agrees with the precise 601 calculation',async t=>{
   const {$,change,period,submit}=await setup(t);
   change('unit','601');period('2024-01','2025-12');submit();
   assert.equal($('claim-value').textContent,'269,895');
   assert.match($('monthly-formula').textContent,/70\.81㎡ ÷ 1,763\.07㎡ ≈ 0\.04016290 \(약 4\.0163%\)/);
-  assert.match($('rounding-note').textContent,/269,904/);assert.match($('rounding-note').textContent,/269,895/);assert.match($('rounding-note').textContent,/차이 9원/);
-  assert.match($('rounding-note').textContent,/더한 뒤 반올림/);
 });
 test('malformed money separators remain visible as errors instead of calculating another amount',async t=>{
   const {$,change,period,submit,openMonths}=await setup(t);
