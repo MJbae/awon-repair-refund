@@ -66,6 +66,51 @@ test('all units calculate with assigned areas and no area input',async t=>{
   }
   assert.equal($('area-type'),null);assert.equal($('custom-area'),null);
 });
+test('monthly reserve choice switches both interpretations without changing the formula',async t=>{
+  const {$,change,period,submit,openMonths,tools}=await setup(t);
+  assert.equal($('reserve-choice').value,'280000');
+  change('unit','601');period('2024-01','2025-12');submit();
+  assert.equal($('claim-value').textContent,'269,895');
+  openMonths();change('reserve-choice','200000');
+  assert.equal($('result').hidden,true);
+  assert.equal($('reserve-heading').textContent,'200,000');
+  assert.equal($('batch-amount').placeholder,'200,000');
+  assert.equal($('month-editors').querySelector('[data-month-action="reserve"]').placeholder,'200,000');
+  assert.match($('source-content').textContent,/200,000원/);
+  assert.equal($('reserve-choice-note').hidden,true);
+  submit();assert.equal($('claim-value').textContent,'192,782');
+  assert.match($('result-rows').firstElementChild.textContent,/8,033/);
+  assert.equal(tools.get('calculate_awon_refund').execute({unit:'601',start:'2024-01',end:'2025-12'}).claim,192782);
+  change('reserve-choice','280000');submit();assert.equal($('claim-value').textContent,'269,895');
+});
+test('reserve choice preserves explicit monthly, range, batch and household adjustments',async t=>{
+  const {window,$,change,period,openMonths,submit}=await setup(t);
+  change('unit','601');period('2024-01','2024-05');
+  change('batch-amount','260000');$('apply-batch').click();
+  change('range-start-year','2024');change('range-start-month','02');change('range-end-year','2024');change('range-end-month','02');change('range-amount','300000');$('add-range').click();
+  openMonths();
+  change($('month-editors').querySelector('[data-month="2024-01"] [data-month-action="reserve"]'),'310000','input');
+  change($('month-editors').querySelector('[data-month="2024-03"] [data-month-action="mode"]'),'actual');
+  change($('month-editors').querySelector('[data-month="2024-03"] [data-month-action="actual"]'),'12345','input');
+  change($('month-editors').querySelector('[data-month="2024-04"] [data-month-action="mode"]'),'owner');
+  change('refunded','1000','input');
+  change('end-month','06');change('reserve-choice','200000');submit();
+  assert.equal($('reserve-choice-note').hidden,false);
+  assert.equal($('ranges-list').children.length,1);assert.equal($('refunded').value,'1000');
+  const reserves=[...$('result-rows').children].map(row=>row.children[1].textContent);
+  assert.deepEqual(reserves,['310,000','300,000','260,000','260,000','260,000','200,000']);
+  assert.equal($('result-rows').children[2].children[2].textContent,'12,345');
+  assert.equal($('result-rows').children[3].children[2].textContent,'0');
+  assert.equal($('result').hidden,false);
+});
+test('choice uses the selected amount for explicit extensions outside the default dates',async t=>{
+  const {$,change,period,submit}=await setup(t);
+  change('unit','601');period('2023-12','2024-01');change('reserve-choice','200000');submit();
+  assert.match($('result-title').textContent,/부분 합계/);
+  assert.equal($('claim-value').textContent,'8,033');
+  const fill=$('missing-notice').querySelector('button');assert.match(fill.textContent,/200,000원/);
+  fill.click();assert.equal($('claim-value').textContent,'16,065');
+});
 test('rate override and invalid overlapping range do not discard valid entries',async t=>{
   const {$,change,period,submit}=await setup(t);
   change('unit','101');period();

@@ -36,7 +36,12 @@
         <p id="period-error" class="error" hidden></p>
       </section>
       <section class="reserve-section">
-        <p class="reserve-guide">아파트 전체 적립액에서 우리 집 면적 비율만큼 계산해요.</p>
+        <label for="reserve-choice">아파트 전체 월 장기수선비 기준</label>
+        <select id="reserve-choice" aria-describedby="reserve-choice-note">
+          <option value="280000">28만 원 · 전액 장기수선비</option>
+          <option value="200000">20만 원 · 주차장 유지관리비 8만 원 제외</option>
+        </select>
+        <p id="reserve-choice-note" class="help" hidden>직접 수정한 기간·월의 금액은 우선 적용됩니다.</p>
         <details id="amount-options" class="options"><summary>계산 기준 확인·변경<span aria-hidden="true">+</span></summary>
           <div class="options-body">
             <div class="reserve-basis"><p class="reserve-basis-label">아파트 전체 월 적립액</p><p class="reserve-basis-value"><span id="reserve-heading">280,000</span><span id="reserve-unit-label"> 원</span></p><p id="reserve-badge" class="help">2024~2026 기본값</p></div>

@@ -15,6 +15,14 @@ async function init() {
     if (!response.ok) throw new Error('기본 자료를 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');
     return response.json();
   }));
+  if (![...$('reserve-choice').options].some(option => Number(option.value) === defaults.amount)) {
+    const option = document.createElement('option');
+    option.value = String(defaults.amount);
+    option.textContent = `${won(defaults.amount)}원 · 기본값`;
+    $('reserve-choice').add(option);
+  }
+  $('reserve-choice').value = String(defaults.amount);
+  $('batch-amount').placeholder = won(defaults.amount);
   $('unit').insertAdjacentHTML('beforeend', building.units.map(unit => `<option value="${unit}">${unit}호</option>`).join(''));
   for (const prefix of ['start','end','range-start','range-end']) {
     $(`${prefix}-year`).innerHTML = Array.from({length:21}, (_, i) => BASE_YEAR - 10 + i).map(year => `<option value="${year}">${year}년</option>`).join('');
@@ -108,6 +116,7 @@ function renderAmountHeading() {
   const amounts = [...new Set(reserves.filter(r => r.amount !== null).map(r => r.amount))];
   const mixed = amounts.length > 1;
   const allMissing = reserves.length > 0 && amounts.length === 0;
+  $('reserve-choice-note').hidden = !reserves.some(r => r.amount !== null && r.source !== '기본 가정');
   $('reserve-heading').textContent = allMissing ? '금액 미입력' : mixed ? '기간별로 다름' : won(amounts[0] ?? defaults.amount);
   $('reserve-unit-label').textContent = mixed || allMissing ? '' : ' 원';
   $('reserve-badge').textContent = allMissing ? '전체 기간 금액 미입력' : reserves.some(r => r.amount === null) ? '일부 기간 금액 미입력' : reserves.some(r => r.source !== '기본 가정') ? '수정 금액 적용' : `${defaults.from.slice(0,4)}~${defaults.to.slice(0,4)} 기본값`;
@@ -151,6 +160,13 @@ function optionAction(action) {
   catch(error) { setMessage('options-error', error.message); }
 }
 function bind() {
+  $('reserve-choice').addEventListener('change', () => {
+    const amount = Number($('reserve-choice').value);
+    if (![...$('reserve-choice').options].some(option => Number(option.value) === amount)) return;
+    defaults.amount = amount;
+    $('batch-amount').placeholder = won(amount);
+    dirty(); renderMonthEditors(); renderLegal();
+  });
   $('unit').addEventListener('change', () => {
     state.unit = $('unit').value;
     setMessage('unit-error'); dirty(); renderUnitArea(); renderMonthEditors();
@@ -308,7 +324,7 @@ function registerAgentTool() {
   const context = document.modelContext;
   if (!context?.registerTool) return;
   const lifecycle = new AbortController();
-  const tool = { name:'calculate_awon_refund', title:'아원데코빌 장기수선비 계산', description:'호수와 납부 기간을 입력해 화면에 추정 정산액을 표시합니다. 면적은 호수별 자료에서 자동 적용합니다. 기본은 2024~2026년 월 280000원이며 현재 월 이후는 향후 예상액으로 구분합니다.', inputSchema:{ type:'object', properties:{ unit:{type:'string',enum:building.units}, start:{type:'string'}, end:{type:'string'} }, required:['unit','start','end'], additionalProperties:false }, annotations:{readOnlyHint:false}, execute(input) {
+  const tool = { name:'calculate_awon_refund', title:'아원데코빌 장기수선비 계산', description:'호수와 납부 기간을 입력해 화면에 추정 정산액을 표시합니다. 면적은 호수별 자료에서 자동 적용하고 현재 화면에서 선택한 월 장기수선비 기준을 사용합니다. 현재 월 이후는 향후 예상액으로 구분합니다.', inputSchema:{ type:'object', properties:{ unit:{type:'string',enum:building.units}, start:{type:'string'}, end:{type:'string'} }, required:['unit','start','end'], additionalProperties:false }, annotations:{readOnlyHint:false}, execute(input) {
     if (!input || !building.units.includes(input.unit) || Object.keys(input).some(key => !['unit','start','end'].includes(key))) throw new Error('호수·시작월·종료월을 올바르게 입력해 주세요.');
     const months = listMonths(input.start,input.end);
     const area = selectedArea(input.unit);
