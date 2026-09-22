@@ -29,28 +29,28 @@ test('area and money parsing preserve hundredths and legitimate zero', () => {
 });
 test('24 months round once after exact summation', () => {
   const result = calculate(base);
-  assert.equal(result.claim,570510);
-  assert.equal(result.rows[0].amount,23771);
+  assert.equal(result.claim,407507);
+  assert.equal(result.rows[0].amount,16979);
   assert.notEqual(result.claim,result.rows.reduce((n,r) => n+r.amount,0));
-  assert.equal(calculate({...base,area:13510,totalArea:159129}).claim,570526);
+  assert.equal(calculate({...base,area:13510,totalArea:159129}).claim,407518);
 });
 test('36-month preset does not change the selected 24-month period', () => {
-  assert.equal(calculate({...base,start:'2024-01',end:'2026-12',asOfMonth:'2026-12'}).claim,855765);
+  assert.equal(calculate({...base,start:'2024-01',end:'2026-12',asOfMonth:'2026-12'}).claim,611261);
   assert.equal(calculate(base).count,24);
 });
 test('future months are separate even when actual amount was entered', () => {
   const result = calculate({...base,start:'2025-01',end:'2026-12'});
-  assert.equal(result.pastTotal,499197);
-  assert.equal(result.futureTotal,71314);
-  assert.equal(result.total,570510);
+  assert.equal(result.pastTotal,356569);
+  assert.equal(result.futureTotal,50938);
+  assert.equal(result.total,407507);
   assert.equal(result.futureCount,3);
   const actual = calculate({...base,start:'2026-10',end:'2026-10',household:{'2026-10':{mode:'actual',amount:30000}}});
   assert.equal(actual.claim,0); assert.equal(actual.futureTotal,30000);
 });
 test('a rate change applies only within its inclusive period', () => {
   const result = calculate({...base,ranges:[{start:'2025-10',end:'2026-09',amount:300000}]});
-  assert.equal(result.claim,590886);
-  assert.equal(result.rows[11].reserve,280000); assert.equal(result.rows[12].reserve,300000);
+  assert.equal(result.claim,509384);
+  assert.equal(result.rows[11].reserve,200000); assert.equal(result.rows[12].reserve,300000);
 });
 test('overlapping ranges rejected; adjacent ranges allowed', () => {
   assert.throws(() => validateRanges([{start:'2024-01',end:'2024-05',amount:1},{start:'2024-05',end:'2024-06',amount:2}]));
@@ -58,11 +58,11 @@ test('overlapping ranges rejected; adjacent ranges allowed', () => {
 });
 test('month > range > batch > preset including zero overrides', () => {
   const result = calculate({...base,start:'2024-01',end:'2024-04',batch:{'2024-01':100,'2024-02':100,'2024-03':100},ranges:[{start:'2024-02',end:'2024-03',amount:200}],monthly:{'2024-03':0}});
-  assert.deepEqual(result.rows.map(r=>r.reserve),[100,200,0,280000]);
+  assert.deepEqual(result.rows.map(r=>r.reserve),[100,200,0,200000]);
 });
 test('uncovered month stays missing; default never silently extends', () => {
   const result = calculate({...base,start:'2023-12',end:'2024-01'});
-  assert.equal(result.claim,23771);
+  assert.equal(result.claim,16979);
   assert.deepEqual(result.missingMonths,['2023-12']);
   assert.deepEqual(result.missingRanges,[{start:'2023-12',end:'2023-12'}]);
   assert.equal(result.rows[0].amount,null);
@@ -82,13 +82,13 @@ test('actual amounts replace estimates and do not get prorated again', () => {
 test('partial month is inclusive and handles leap years', () => {
   assert.equal(daysInMonth('2024-02'),29);
   assert.equal(daysInMonth('2025-02'),28);
-  assert.equal(calculate({...base,start:'2024-02',end:'2024-02',household:{'2024-02':{partial:{fromDay:15,toDay:29}}}}).claim,12295);
+  assert.equal(calculate({...base,start:'2024-02',end:'2024-02',household:{'2024-02':{partial:{fromDay:15,toDay:29}}}}).claim,8782);
   assert.throws(() => calculate({...base,start:'2025-02',end:'2025-02',household:{'2025-02':{partial:{fromDay:15,toDay:29}}}}));
 });
 test('refund is deducted from past months only, excessive refunds fail', () => {
-  assert.equal(calculate({...base,refunded:10000}).claim,560510);
-  assert.equal(calculate({...base,refunded:570510}).claim,0);
-  assert.throws(() => calculate({...base,refunded:570511}));
+  assert.equal(calculate({...base,refunded:10000}).claim,397507);
+  assert.equal(calculate({...base,refunded:407507}).claim,0);
+  assert.throws(() => calculate({...base,refunded:407508}));
   assert.throws(() => calculate({...base,start:'2026-10',end:'2026-12',refunded:1}));
 });
 test('period shrink and expansion do not mutate monthly overrides', () => {

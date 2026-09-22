@@ -40,7 +40,7 @@ export function validateMoney(value, label = '금액') {
 }
 export function parseMoney(value, label = '금액') {
   const text = String(value).trim();
-  if (!/^(?:\d+|[1-9]\d{0,2}(?:,\d{3})+)$/.test(text)) throw new Error(`${label}을 원 단위 숫자로 입력해 주세요. 쉼표는 280,000처럼 세 자리마다 사용합니다.`);
+  if (!/^(?:\d+|[1-9]\d{0,2}(?:,\d{3})+)$/.test(text)) throw new Error(`${label}을 원 단위 숫자로 입력해 주세요. 쉼표는 200,000처럼 세 자리마다 사용합니다.`);
   return validateMoney(Number(text.replaceAll(',', '')), label);
 }
 export function parseArea(value) {

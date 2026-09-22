@@ -17,7 +17,7 @@ assert.equal(unitAreas.reduce((sum,type) => sum + type.supply,0), building.total
 for (const type of building.areaTypes) assert.equal(unitAreas.filter(area => area.id === type.id).length, type.count);
 assert.equal(defaults.from, '2024-01');
 assert.equal(defaults.to, '2026-12');
-assert.equal(defaults.amount, 280000);
+assert.equal(defaults.amount, 200000);
 assert.equal(defaults.status, 'assumption');
 assert.equal(observations.length, 3);
 assert(observations.every(row => row.billingMonth === null && row.status === 'observed-withdrawal'));

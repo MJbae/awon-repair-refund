@@ -15,13 +15,11 @@ async function init() {
     if (!response.ok) throw new Error('기본 자료를 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');
     return response.json();
   }));
-  if (![...$('reserve-choice').options].some(option => Number(option.value) === defaults.amount)) {
-    const option = document.createElement('option');
-    option.value = String(defaults.amount);
-    option.textContent = `${won(defaults.amount)}원 · 기본값`;
-    $('reserve-choice').add(option);
-  }
+  const defaultChoice = $('reserve-choice').options[0];
+  defaultChoice.value = String(defaults.amount);
+  defaultChoice.textContent = `${defaults.amount === 200000 ? '20만 원' : `${won(defaults.amount)}원`} · 기본값`;
   $('reserve-choice').value = String(defaults.amount);
+  $('custom-reserve-amount').placeholder = won(defaults.amount);
   $('batch-amount').placeholder = won(defaults.amount);
   $('unit').insertAdjacentHTML('beforeend', building.units.map(unit => `<option value="${unit}">${unit}호</option>`).join(''));
   for (const prefix of ['start','end','range-start','range-end']) {
@@ -108,18 +106,27 @@ function syncForm() {
 function renderRanges() {
   $('ranges-list').innerHTML = state.ranges.map((range, index) => `<div class="range-row"><div>${e(range.start)}~${e(range.end)}<strong>월 ${won(range.amount)}원</strong></div><button type="button" data-delete-range="${index}" aria-label="${e(range.start)}부터 ${e(range.end)} 금액 변경 삭제">삭제</button></div>`).join('');
 }
-function reserveFor(month) { return reserveForMonth(month, { defaults, batch:state.batch, ranges:state.ranges, monthly:state.monthly }); }
+function selectedDefaults() {
+  return $('reserve-choice').value === 'custom'
+    ? { ...defaults, amount:parseMoney($('custom-reserve-amount').value, '월 장기수선 금액') }
+    : defaults;
+}
+function previewDefaults() {
+  try { return selectedDefaults(); } catch { return null; }
+}
+function reserveFor(month) { return reserveForMonth(month, { defaults:previewDefaults(), batch:state.batch, ranges:state.ranges, monthly:state.monthly }); }
 
 function renderAmountHeading() {
+  const selected = previewDefaults();
   let reserves = [];
   try { reserves = listMonths(state.start,state.end).map(reserveFor); } catch { /* Empty or incomplete range uses preset label. */ }
   const amounts = [...new Set(reserves.filter(r => r.amount !== null).map(r => r.amount))];
   const mixed = amounts.length > 1;
-  const allMissing = reserves.length > 0 && amounts.length === 0;
+  const allMissing = (reserves.length > 0 || !selected) && amounts.length === 0;
   $('reserve-choice-note').hidden = !reserves.some(r => r.amount !== null && r.source !== '기본 가정');
-  $('reserve-heading').textContent = allMissing ? '금액 미입력' : mixed ? '기간별로 다름' : won(amounts[0] ?? defaults.amount);
+  $('reserve-heading').textContent = allMissing ? '금액 미입력' : mixed ? '기간별로 다름' : won(amounts[0] ?? selected.amount);
   $('reserve-unit-label').textContent = mixed || allMissing ? '' : ' 원';
-  $('reserve-badge').textContent = allMissing ? '전체 기간 금액 미입력' : reserves.some(r => r.amount === null) ? '일부 기간 금액 미입력' : reserves.some(r => r.source !== '기본 가정') ? '수정 금액 적용' : `${defaults.from.slice(0,4)}~${defaults.to.slice(0,4)} 기본값`;
+  $('reserve-badge').textContent = allMissing ? '전체 기간 금액 미입력' : reserves.some(r => r.amount === null) ? '일부 기간 금액 미입력' : reserves.some(r => r.source !== '기본 가정') ? '수정 금액 적용' : `${defaults.from.slice(0,4)}~${defaults.to.slice(0,4)} ${$('reserve-choice').value === 'custom' ? '직접 입력액' : '기본값'}`;
 }
 
 function householdDrafts() { return state.drafts.households[state.unit] ||= {}; }
@@ -160,13 +167,26 @@ function optionAction(action) {
   catch(error) { setMessage('options-error', error.message); }
 }
 function bind() {
-  $('reserve-choice').addEventListener('change', () => {
-    const amount = Number($('reserve-choice').value);
-    if (![...$('reserve-choice').options].some(option => Number(option.value) === amount)) return;
-    defaults.amount = amount;
-    $('batch-amount').placeholder = won(amount);
+  const reserveChanged = () => {
+    $('custom-reserve').hidden = $('reserve-choice').value !== 'custom';
+    try {
+      const selected = selectedDefaults();
+      $('batch-amount').placeholder = won(selected.amount);
+      $('custom-reserve-amount').removeAttribute('aria-invalid');
+      setMessage('custom-reserve-error');
+    } catch(error) {
+      $('batch-amount').placeholder = '금액 입력';
+      $('custom-reserve-amount').setAttribute('aria-invalid', 'true');
+      setMessage('custom-reserve-error', error.message);
+    }
     dirty(); renderMonthEditors(); renderLegal();
+  };
+  $('reserve-choice').addEventListener('change', () => {
+    reserveChanged();
+    if (!$('custom-reserve').hidden) $('custom-reserve-amount').focus();
   });
+  $('custom-reserve-amount').addEventListener('input', reserveChanged);
+  $('custom-reserve-amount').addEventListener('change', reserveChanged);
   $('unit').addEventListener('change', () => {
     state.unit = $('unit').value;
     setMessage('unit-error'); dirty(); renderUnitArea(); renderMonthEditors();
@@ -223,7 +243,7 @@ function bind() {
   $('missing-notice').addEventListener('click', event => {
     const button = event.target.closest('[data-fill-start]');
     if (!button) return;
-    for (const month of listMonths(button.dataset.fillStart, button.dataset.fillEnd)) state.batch[month] = defaults.amount;
+    for (const month of listMonths(button.dataset.fillStart, button.dataset.fillEnd)) state.batch[month] = selectedDefaults().amount;
     dirty(); renderMonthEditors(); calculateAndRender(false);
   });
 
@@ -277,7 +297,7 @@ function calculateAndRender(scroll = true) {
     const refunded = refundFor(state.unit);
     state.refunds[state.unit] = refunded;
     const area = selectedArea();
-    const result = calculate({ start:state.start, end:state.end, area, totalArea:building.totalSupply, defaults, batch:state.batch, ranges:state.ranges, monthly:state.monthly, household:selectedHousehold(state.unit,state.start,state.end), refunded });
+    const result = calculate({ start:state.start, end:state.end, area, totalArea:building.totalSupply, defaults:selectedDefaults(), batch:state.batch, ranges:state.ranges, monthly:state.monthly, household:selectedHousehold(state.unit,state.start,state.end), refunded });
     if (result.missingAreaMonths.length) throw new Error('호수별 면적 자료를 확인해 주세요.');
     currentResult = result; renderResult();
     if (scroll) { $('result').focus({ preventScroll:true }); $('result').scrollIntoView({ behavior:matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth', block:'start' }); }
@@ -306,15 +326,16 @@ function renderResult() {
   if (result.actualTotal || result.rows.some(row => row.mode === 'actual')) breakdown.push(['직접 입력액 (과거·현재 월)', `${won(result.actualTotal)}원`], ['면적 추정액 (과거·현재 월)', `${won(result.estimatedTotal)}원`]);
   if (result.futureCount) breakdown.push([`향후 ${result.futureCount}개월 예상액 · 위 금액에 미포함`, `${won(result.futureTotal)}원`]);
   $('result-breakdown').innerHTML = breakdown.length ? `<div class="breakdown">${breakdown.map(([label, value]) => `<p><span>${e(label)}</span><strong>${e(value)}</strong></p>`).join('')}</div>` : '';
-  $('missing-notice').innerHTML = result.missingRanges.map(range => `<div class="notice"><strong>${e(range.start)}~${e(range.end)} 금액이 비어 있어요.</strong><br>이 기간은 합계에서 제외했어요. 금액 변경 옵션에서 입력하거나 기본 금액을 적용하세요.<button type="button" class="secondary-button" data-fill-start="${range.start}" data-fill-end="${range.end}">이 구간에도 월 ${won(defaults.amount)}원 적용</button></div>`).join('');
+  $('missing-notice').innerHTML = result.missingRanges.map(range => `<div class="notice"><strong>${e(range.start)}~${e(range.end)} 금액이 비어 있어요.</strong><br>이 기간은 합계에서 제외했어요. 금액 변경 옵션에서 입력하거나 기준 금액을 적용하세요.<button type="button" class="secondary-button" data-fill-start="${range.start}" data-fill-end="${range.end}">이 구간에도 월 ${won(selectedDefaults().amount)}원 적용</button></div>`).join('');
   $('result-rows').innerHTML = result.rows.map(row => `<tr><td>${row.month}${row.isFuture ? '<br><small>향후 예상</small>' : ''}</td><td>${row.reserve === null ? '미입력' : won(row.reserve)}</td><td>${row.amount === null ? '제외' : won(row.amount)}</td><td>${e(row.source)}<br><small>${e(row.reserveSource)}${row.difference !== null && row.difference !== 0 ? `<br>면적 추정 ${won(row.referenceEstimate)}원과 ${row.difference > 0 ? '+' : '−'}${won(Math.abs(row.difference))}원 차이` : ''}</small></td></tr>`).join('');
 }
 
 function renderLegal() {
+  const selected = previewDefaults();
   $('legal-entries').innerHTML = legal.entries.map(entry => `<div class="legal-entry"><p class="legal-condition">${e(entry.condition)}</p><blockquote>${e(entry.quote)}</blockquote><a href="${e(entry.url)}" target="_blank" rel="noopener noreferrer">${e(entry.title)} ↗</a></div>`).join('');
   $('source-content').innerHTML = `
     <section class="source-block"><h3>계산은 이렇게 해요</h3><div class="formula-steps"><span>전체 월 적립액</span><b aria-hidden="true">×</b><span>우리 집 면적</span><b aria-hidden="true">÷</b><span>전체 면적</span></div><p>전체 공급면적 <strong>${formatArea(building.totalSupply)}㎡</strong> · 선택 기간의 월별 금액 합산</p></section>
-    <section class="source-block"><h3>기본 금액과 납부 가정</h3><dl class="source-facts"><div><dt>기본 기간</dt><dd>${e(formatMonth(defaults.from))}~${e(formatMonth(defaults.to))}</dd></div><div><dt>전체 월 적립액</dt><dd>${won(defaults.amount)}원</dd></div><div><dt>납부 방식</dt><dd>관리비에 포함해 면적 비율만큼 납부한 것으로 가정</dd></div></dl></section>
+    <section class="source-block"><h3>기준 금액과 납부 가정</h3><dl class="source-facts"><div><dt>기본 기간</dt><dd>${e(formatMonth(defaults.from))}~${e(formatMonth(defaults.to))}</dd></div><div><dt>전체 월 적립액</dt><dd>${selected ? `${won(selected.amount)}원` : '금액 미입력'}</dd></div><div><dt>납부 방식</dt><dd>관리비에 포함해 면적 비율만큼 납부한 것으로 가정</dd></div></dl></section>
     <section class="source-block"><h3>호수별 면적</h3><p>공급면적 기준 · A/B는 면적 타입</p><div class="table-wrap" tabindex="0" role="region" aria-label="호수별 공급면적과 전용면적 표"><table><caption class="sr-only">호수별 면적, 단위 제곱미터</caption><thead><tr><th scope="col">호수</th><th scope="col">공급면적 ㎡</th><th scope="col">전용면적 ㎡</th></tr></thead><tbody>${building.units.map(unit => { const type = unitType(unit); return `<tr><th scope="row">${unit}호</th><td>${(type.supply/100).toFixed(2)}${type.variant ? ` <small class="type-tag">${e(type.variant)}</small>` : ''}</td><td>${(type.exclusive/100).toFixed(2)}</td></tr>`; }).join('')}</tbody></table></div></section>
     <section class="source-block"><h3>자료 출처</h3><p>호수별 면적은 제공 자료, 면적 타입은 아래 출처를 참고했습니다.</p><div class="source-links">${building.sources.map(source => `<a href="${e(source.url)}" target="_blank" rel="noopener noreferrer"><span>${e(source.title)}</span><span class="source-link-action">새 창 <span aria-hidden="true">↗</span></span></a>`).join('')}</div><p class="help">공개 자료 확인일: ${e(building.checkedAt)}</p></section>
 `;
@@ -329,7 +350,7 @@ function registerAgentTool() {
     const months = listMonths(input.start,input.end);
     const area = selectedArea(input.unit);
     if (months.some(month => state.drafts.reserve[month] || Object.keys(state.drafts.households[input.unit]?.[month] || {}).length)) throw new Error('화면에서 월별 입력 오류를 먼저 수정해 주세요.');
-    calculate({ start:input.start,end:input.end,area,totalArea:building.totalSupply,defaults,batch:state.batch,ranges:state.ranges,monthly:state.monthly,household:selectedHousehold(input.unit,input.start,input.end),refunded:refundFor(input.unit) });
+    calculate({ start:input.start,end:input.end,area,totalArea:building.totalSupply,defaults:selectedDefaults(),batch:state.batch,ranges:state.ranges,monthly:state.monthly,household:selectedHousehold(input.unit,input.start,input.end),refunded:refundFor(input.unit) });
     state.unit = input.unit; state.start = input.start; state.end = input.end;
     dirty(); syncForm(); calculateAndRender(false);
     if (!currentResult) throw new Error($('form-error').textContent || '입력값을 확인해 주세요.');

@@ -38,16 +38,21 @@
       <section class="reserve-section">
         <label for="reserve-choice">아파트 전체 월 장기수선비 기준</label>
         <select id="reserve-choice" aria-describedby="reserve-choice-note">
-          <option value="280000">28만 원 · 전액 장기수선비</option>
-          <option value="200000">20만 원 · 주차장 유지관리비 8만 원 제외</option>
+          <option value="200000">20만 원 · 기본값</option>
+          <option value="custom">직접 금액 입력</option>
         </select>
+        <div id="custom-reserve" hidden>
+          <label for="custom-reserve-amount">아파트 전체 월 장기수선비</label>
+          <div class="input-suffix"><input id="custom-reserve-amount" inputmode="numeric" placeholder="200,000" aria-describedby="custom-reserve-error"><span>원</span></div>
+          <p id="custom-reserve-error" class="error" role="alert" hidden></p>
+        </div>
         <p id="reserve-choice-note" class="help" hidden>직접 수정한 기간·월의 금액은 우선 적용됩니다.</p>
         <details id="amount-options" class="options"><summary>계산 기준 확인·변경<span aria-hidden="true">+</span></summary>
           <div class="options-body">
-            <div class="reserve-basis"><p class="reserve-basis-label">아파트 전체 월 적립액</p><p class="reserve-basis-value"><span id="reserve-heading">280,000</span><span id="reserve-unit-label"> 원</span></p><p id="reserve-badge" class="help">2024~2026 기본값</p></div>
+            <div class="reserve-basis"><p class="reserve-basis-label">아파트 전체 월 적립액</p><p class="reserve-basis-value"><span id="reserve-heading">200,000</span><span id="reserve-unit-label"> 원</span></p><p id="reserve-badge" class="help">2024~2026 기본값</p></div>
 
             <label for="batch-amount">선택 기간에 같은 금액 적용</label>
-            <div class="inline-action"><div class="input-suffix"><input id="batch-amount" inputmode="numeric" placeholder="280,000" aria-label="일괄 적용할 전체 월 적립액"><span>원</span></div><button id="apply-batch" type="button" class="secondary-button">적용</button></div>
+            <div class="inline-action"><div class="input-suffix"><input id="batch-amount" inputmode="numeric" placeholder="200,000" aria-label="일괄 적용할 전체 월 적립액"><span>원</span></div><button id="apply-batch" type="button" class="secondary-button">적용</button></div>
             <label class="checkbox-label"><input id="replace-overrides" type="checkbox">기간별·월별 수정도 함께 바꾸기</label>
             <div id="ranges-list" class="ranges-list"></div>
             <details class="range-creator"><summary>금액이 달라진 기간 추가</summary><div class="range-form"><div class="range-dates"><fieldset class="month-field"><legend>시작월</legend><div class="month-input"><select id="range-start-year" class="year-select" aria-label="금액 변경 시작 연도"></select><select id="range-start-month" aria-label="금액 변경 시작 월"><option value="">월 선택</option></select></div></fieldset><fieldset class="month-field"><legend>마지막 월</legend><div class="month-input"><select id="range-end-year" class="year-select" aria-label="금액 변경 마지막 연도"></select><select id="range-end-month" aria-label="금액 변경 마지막 월"><option value="">월 선택</option></select></div></fieldset></div><label for="range-amount">전체 월 적립액</label><div class="inline-action"><div class="input-suffix"><input id="range-amount" inputmode="numeric" placeholder="예: 300,000"><span>원</span></div><button id="add-range" type="button" class="secondary-button">기간 추가</button></div></div></details>

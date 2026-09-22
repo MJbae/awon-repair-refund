@@ -1,7 +1,7 @@
 {
   "from":"2024-01",
   "to":"2026-12",
-  "amount":280000,
+  "amount":200000,
   "status":"assumption",
   "source":"사용자가 정한 계산 가정",
   "includedInMaintenanceFee":true,

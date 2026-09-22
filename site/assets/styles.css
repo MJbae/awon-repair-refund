@@ -72,6 +72,7 @@
 }
 
 /* The building-wide reserve is a calculation input, never a result headline. */
+#custom-reserve { margin-top: 16px; }
 .reserve-guide { margin: 0; color: var(--muted); font-size: .875rem; line-height: 1.65; }
 .reserve-basis { padding: 12px 14px; border-radius: 8px; background: #f5f7fb; }
 .reserve-basis-label, .reserve-basis-value { margin: 0; font-size: .875rem; line-height: 1.65; }
